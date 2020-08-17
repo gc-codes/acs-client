@@ -1,14 +1,17 @@
 {
   "name": "acs-client",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
   "dependencies": {
     "@testing-library/jest-dom": "^4.2.4",
     "@testing-library/react": "^9.3.2",
     "@testing-library/user-event": "^7.1.2",
     "react": "^16.13.1",
     "react-dom": "^16.13.1",
-    "react-scripts": "3.4.3"
+    "react-scripts": "3.4.3",
+    "@azure/communication-common": "file://./packages/communication-common-1.0.0-dev.20200722.2.tgz",
+    "@azure/communication-configuration": "file://./packages/communication-configuration-1.0.0-dev.20200722.2.tgz",
+    "@skype/spool-sdk": "file://./packages/acs-calling-client-web-sdk-v1.7.8.tgz"
   },
   "scripts": {
     "start": "react-scripts start",
