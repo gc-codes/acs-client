@@ -127,7 +127,7 @@ class Dashboard extends Component {
 
     handleMessageChange(event){
         // implement send typing notif
-        console.log(event.target.value);
+
         this.setState({
             messageTextBox : event.target.value
         })
@@ -141,6 +141,21 @@ class Dashboard extends Component {
         this.setState({
             messages : [...this.state.messages, message],
             messageTextBox : ""
+        })
+
+        const sleep = milliseconds => { 
+            return new Promise(resolve => setTimeout(resolve, milliseconds)); 
+        }; 
+        
+        sleep(3000).then(()=>{
+            let message = new Message({
+                id: 1,
+                message: "This is a dummy reply",
+            })
+            this.setState({
+                messages : [...this.state.messages, message],
+                messageTextBox : ""
+            })
         })
     }
 
