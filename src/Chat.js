@@ -26,6 +26,7 @@ class Chat extends Component {
         console.log("chat open");
     }
 
+
     _onMessageWasSent(message) {
         this.setState({
             messageList: [...this.state.messageList, message]
@@ -38,7 +39,9 @@ class Chat extends Component {
                 messageList: [...this.state.messageList, {
                     author: 'them',
                     type: 'text',
-                    data: { text }
+                    data: { 
+                        text : text
+                    }
                 }]
             })
         }

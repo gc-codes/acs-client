@@ -21,14 +21,18 @@ class Dashboard extends Component {
             showCameraNotFoundWarning: false,
             showSpeakerNotFoundWarning: false,
             showMicrophoneNotFoundWarning: false,
+            messageTextBox : "",
             messages: [
                 new Message({
                     id: 1,
                     message: "Hey, how you doing?",
                 }),
-                new Message({ id: 0, message: "Hey, I'm doing great" }),
+                new Message({ id: 0, message: "Hi I am doing great thanks ;)" }),
             ],
         };
+
+        this.handleMessageChange = this.handleMessageChange.bind(this);
+        this.handleMessageSent = this.handleMessageSent.bind(this);
     }
 
     async componentDidMount() {
@@ -121,6 +125,40 @@ class Dashboard extends Component {
         this.destinationId = evt.target.value;
     }
 
+    handleMessageChange(event){
+        // implement send typing notif
+
+        this.setState({
+            messageTextBox : event.target.value
+        })
+    }
+
+    handleMessageSent(event){
+        let message = new Message({
+            id: 0,
+            message: this.state.messageTextBox,
+        })
+        this.setState({
+            messages : [...this.state.messages, message],
+            messageTextBox : ""
+        })
+
+        const sleep = milliseconds => { 
+            return new Promise(resolve => setTimeout(resolve, milliseconds)); 
+        }; 
+        
+        sleep(3000).then(()=>{
+            let message = new Message({
+                id: 1,
+                message: "This is a dummy reply",
+            })
+            this.setState({
+                messages : [...this.state.messages, message],
+                messageTextBox : ""
+            })
+        })
+    }
+
     render() {
         return (
             <div style={{ height: '80%' }}>
@@ -204,10 +242,11 @@ class Dashboard extends Component {
                                         <FormControl
                                             placeholder="Type a message"
                                             aria-describedby="sendMessage-btn"
+                                            value = {this.state.messageTextBox}
                                             onChange={this.handleMessageChange}
                                         />
                                         <InputGroup.Append>
-                                            <Button variant="success" id="sendMessage-btn" onClick={() => { }}>Send</Button>
+                                            <Button variant="success" id="sendMessage-btn" onClick={this.handleMessageSent}>Send</Button>
                                         </InputGroup.Append>
                                     </InputGroup>
                                 </Card.Footer>
