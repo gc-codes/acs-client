@@ -1,18 +1,21 @@
 import React, { Component } from 'react';
-import { Navbar, Jumbotron, Button, Card, FormControl, InputGroup, Media, Container, Row, Col } from 'react-bootstrap';
-import logo from './logo.svg';
+import { Button, Card, FormControl, InputGroup, Container, Row, Col } from 'react-bootstrap';
 import { ChatFeed, Message } from 'react-chat-ui';
-import { CallingFactory, UserAccessTokenCredential, CallOptions } from '@skype/spool-sdk';
+import { CallingFactory, UserAccessTokenCredential } from '@skype/spool-sdk';
+// , CallOptions
 import { createClientLogger, setLogLevel } from '@azure/logger';
 import CallCard from './CallCard';
-import Chat from './Chat';
+// import Chat from './Chat';
+import Navigation from './partials/Navigation';
+import SelectUserBody from './partials/SelectUserBody';
+import axios from 'axios';
 
 class Dashboard extends Component {
     constructor(props) {
         super(props);
         this.userDetails = props.userDetails;
-        this.destinationId = null;
         this.callClient = null;
+        this.otherUsers = [];
 
         this.state = {
             selectedCameraDeviceId: null,
@@ -21,6 +24,7 @@ class Dashboard extends Component {
             showCameraNotFoundWarning: false,
             showSpeakerNotFoundWarning: false,
             showMicrophoneNotFoundWarning: false,
+            selectedUser: null,
             messages: [
                 new Message({
                     id: 1,
@@ -32,7 +36,7 @@ class Dashboard extends Component {
     }
 
     async componentDidMount() {
-        const tokenCredential = new UserAccessTokenCredential(this.userDetails.token);
+        const tokenCredential = new UserAccessTokenCredential(this.userDetails.spoolToken);
         const logger = createClientLogger('ACS');
         setLogLevel('verbose');
         logger.verbose.log = (...args) => { console.log(...args); };
@@ -63,11 +67,25 @@ class Dashboard extends Component {
                 }
             });
         });
+        // Fetch other users
+        this.getOtherUsers();
+    }
+
+    // Fetch other users
+    getOtherUsers() {
+        const headers = {
+            'Authorization': 'Bearer ' + this.props.userDetails.token
+        };
+        axios.get('/user/getOtherUsers', { headers })
+            // .then(response => console.log(response.data));
+            .then(response => this.setState({ otherUsers: response.data.filter(user => user.username !== this.userDetails.username) }));
     }
 
     placeCall = async () => {
         try {
-            this.state.callClient.call([this.destinationId], this.getPlaceCallOptions());
+            this.getSpoolId(this.state.selectedUser).then(userSpoolID => {
+                this.state.callClient.call([userSpoolID], this.getPlaceCallOptions());
+            });
         } catch (e) {
             console.log('Failed to place a call', e);
         }
@@ -116,90 +134,84 @@ class Dashboard extends Component {
         return placeCallOptions;
     }
 
-    handleDestinationIdChange = (evt) => {
-        console.log(evt.target.value);
-        this.destinationId = evt.target.value;
+    // Select user to chat or have a call with
+    selectUser = (user) => {
+        if (user.spoolID === "") {
+            this.getSpoolId(user).then(userSpoolID => {
+                user.spoolID = userSpoolID;
+                this.setState({ selectedUser: user });
+            });
+        } else {
+            this.setState({ selectedUser: user });
+        }
+    }
+
+    async getSpoolId(user) {
+        const headers = {
+            'Authorization': 'Bearer ' + this.props.userDetails.token
+        };
+        let response = await axios.get(`/user/getSpoolId?username=${user.username}`, { headers })
+        return response.data.spoolID;
     }
 
     render() {
         return (
             <div style={{ height: '80%' }}>
-                <Navbar bg="dark" variant="dark">
-                    <Navbar.Brand href="#home">
-                        <img
-                            alt=""
-                            src="https://i1.wp.com/jaredrhodes.com/wp-content/uploads/2019/01/azure-logo.png?fit=1200%2C936&ssl=1"
-                            width="30"
-                            height="30"
-                            className="d-inline-block align-top"
-                        />{' '}
-                        Azure Communication Services
-                    </Navbar.Brand>
-                    <Navbar.Collapse className="justify-content-end">
-                        <Navbar.Text>
-                            <b>Identity:</b> { this.userDetails.identity }
-                        </Navbar.Text>
-                    </Navbar.Collapse>
-                </Navbar>
+                {/* Navbar goes here */}
+                <Navigation userDetails={this.userDetails} />
+
+                {/* Chat and call area container */}
                 <Container style={{ height: '100%', marginTop: '40px' }}>
                     <Row style={{ height: '100%' }}>
                         <Col style={{ padding: '0px' }}>
                             <Card style={{ borderRadius: '0px', height: '100%' }}>
-                                <Card.Title style={{ paddingLeft: '14px', paddingTop: '12px' }}>Users</Card.Title>
+                                <a style={{ padding: '14px', paddingTop: '12px', borderBottom: '1px solid rgba(0,0,0,.14)', fontWeight: 'bold' }}>Users</a>
                                 <ul className="list-unstyled">
-                                    <li><Card.Header><img src="https://a1cf74336522e87f135f-2f21ace9a6cf0052456644b80fa06d4f.ssl.cf2.rackcdn.com/images/characters_opt/p-friends-matt-leblanc.jpg" style={{ width: '40px', height: '40px', borderRadius: '50%', marginRight: '8px' }} />Joey Tribbiani</Card.Header></li>
-                                    <li><Card.Header><img src="https://pbs.twimg.com/profile_images/928266336073117696/W2gCidjA_400x400.jpg" style={{ width: '40px', height: '40px', borderRadius: '50%', marginRight: '8px' }}/>Jake Peralta</Card.Header></li>
-                                    <li><Card.Header><img src="https://pyxis.nymag.com/v1/imgs/079/792/3ed0d94be0a9bd3d023f00532889bab152-30-chandler-bing.rsquare.w330.jpg" style={{ width: '40px', height: '40px', borderRadius: '50%', marginRight: '8px' }}/>Chandler Bing</Card.Header></li>
-                                    <li><Card.Header><img src="https://i.pinimg.com/236x/72/e2/a5/72e2a574c0b19066ffda716eceeb7d78.jpg" style={{ width: '40px', height: '40px', borderRadius: '50%', marginRight: '8px' }}/>Amy Santiago</Card.Header></li>
+                                    {(this.state.otherUsers) && this.state.otherUsers.map(user =>
+                                        <li key={user.username} onClick={() => this.selectUser(user)}><Card.Header className="userListTile"><img src="https://immedilet-invest.com/wp-content/uploads/2016/01/user-placeholder-300x300.jpg" style={{ width: '40px', height: '40px', borderRadius: '50%', marginRight: '8px' }} />{user.username}</Card.Header></li>
+                                    )}
                                 </ul>
                             </Card>
                         </Col>
                         <Col style={{ padding: '0px' }}>
                             <Card style={{ width: '700px', borderRadius: '0px', height: '100%' }}>
                                 <Card.Header>
-                                    <b>Joey Tribbiani</b>
-                                    <Button style={{ float: 'right', borderTopLeftRadius: '0px', borderBottomLeftRadius: '0px' }} id="placeCall-btn" onClick={() => this.placeCall()}><i className="fas fa-phone"></i></Button>
-                                    <FormControl
-                                        style={{ width: '200px', float: 'right', borderTopRightRadius: '0px', borderBottomRightRadius: '0px' }}
-                                        placeholder="Enter destination user ID"
-                                        aria-describedby="placeCall-btn"
-                                        id="destinationID"
-                                        onChange={this.handleDestinationIdChange}
-                                    />
-
+                                    <b>{(this.state.selectedUser) ? this.state.selectedUser.username : "Chat"}</b>
+                                    {this.state.selectedUser && <Button variant="outline-success" style={{ float: 'right' }} id="placeCall-btn" onClick={() => this.placeCall()}><i className="fas fa-phone"></i></Button>}
                                 </Card.Header>
-                                <Card.Body>
-                                    {/* Calling UI goes here */}
-                                    {
-                                        this.state.call && (<CallCard call={this.state.call}
-                                            callClient={this.state.callClient}
-                                            selectedCameraDeviceId={this.state.selectedCameraDeviceId}
-                                            selectedSpeakerDeviceId={this.state.selectedSpeakerDeviceId}
-                                            selectedMicrophoneDeviceId={this.state.selectedMicrophoneDeviceId} />)
-                                    }
-                                    {/* Messages go here */}
-                                    {!this.state.call &&
-                                        (<ChatFeed
-                                            messages={this.state.messages} // Boolean: list of message objects
-                                            isTyping={this.state.is_typing} // Boolean: is the recipient typing
-                                            hasInputField={false} // Boolean: use our input, or use your own
-                                            showSenderName // show the name of the user who sent the message
-                                            bubblesCentered={false} //Boolean should the bubbles be centered in the feed?
-                                            // JSON: Custom bubble styles
-                                            bubbleStyles={
-                                                {
-                                                    text: {
-                                                        fontSize: 14
-                                                    },
-                                                    chatbubble: {
-                                                        borderRadius: 4,
-                                                        padding: 8
+                                {(this.state.selectedUser || this.state.call) ?
+                                    <Card.Body>
+                                        {/* Calling UI goes here */}
+                                        {
+                                            this.state.call && (<CallCard call={this.state.call}
+                                                callClient={this.state.callClient}
+                                                selectedCameraDeviceId={this.state.selectedCameraDeviceId}
+                                                selectedSpeakerDeviceId={this.state.selectedSpeakerDeviceId}
+                                                selectedMicrophoneDeviceId={this.state.selectedMicrophoneDeviceId} />)
+                                        }
+                                        {/* Messages go here */}
+                                        {!this.state.call &&
+                                            (<ChatFeed
+                                                messages={this.state.messages} // Boolean: list of message objects
+                                                isTyping={this.state.is_typing} // Boolean: is the recipient typing
+                                                hasInputField={false} // Boolean: use our input, or use your own
+                                                showSenderName // show the name of the user who sent the message
+                                                bubblesCentered={false} //Boolean should the bubbles be centered in the feed?
+                                                // JSON: Custom bubble styles
+                                                bubbleStyles={
+                                                    {
+                                                        text: {
+                                                            fontSize: 14
+                                                        },
+                                                        chatbubble: {
+                                                            borderRadius: 4,
+                                                            padding: 8
+                                                        }
                                                     }
                                                 }
-                                            }
-                                        />)}
-                                </Card.Body>
-                                <Card.Footer>
+                                            />)}
+                                    </Card.Body> : <SelectUserBody />}
+                                {(!this.state.call && this.state.selectedUser) && <Card.Footer>
                                     <InputGroup className="mb-3" style={{ width: '100%' }}>
                                         <FormControl
                                             placeholder="Type a message"
@@ -210,7 +222,7 @@ class Dashboard extends Component {
                                             <Button variant="success" id="sendMessage-btn" onClick={() => { }}>Send</Button>
                                         </InputGroup.Append>
                                     </InputGroup>
-                                </Card.Footer>
+                                </Card.Footer>}
                             </Card>
                         </Col>
                     </Row>
@@ -221,42 +233,3 @@ class Dashboard extends Component {
 }
 
 export default Dashboard;
-
-// Old Components
-{/* <Jumbotron>
-                    <h1>Hello, John Doe!</h1>
-                    <p>
-                        <b>Identity:</b> {this.userDetails.identity} <br />
-                    </p>
-                    <p>
-                        <InputGroup className="mb-3" style={{ width: '45%' }}>
-                            <FormControl
-                                placeholder="Enter destination user ID"
-                                aria-describedby="placeCall-btn"
-                                id="destinationID"
-                                onChange={this.handleDestinationIdChange}
-                            />
-                            <InputGroup.Append>
-                                <Button id="placeCall-btn" onClick={() => this.placeCall()}>Place call</Button>
-                            </InputGroup.Append>
-                        </InputGroup>
-                    </p>
-                </Jumbotron> */}
-{/* Call Card */ }
-{/* <Card style={{ width: '65%', marginTop: '40px', marginLeft: '24px' }}>
-                    <Card.Body>
-                        <Card.Title>Call section</Card.Title>
-                        <Card.Subtitle className="mb-2 text-muted"></Card.Subtitle>
-                        <Card.Body>
-                            {
-                                this.state.call && (<CallCard call={this.state.call}
-                                    callClient={this.state.callClient}
-                                    selectedCameraDeviceId={this.state.selectedCameraDeviceId}
-                                    selectedSpeakerDeviceId={this.state.selectedSpeakerDeviceId}
-                                    selectedMicrophoneDeviceId={this.state.selectedMicrophoneDeviceId} />)
-                            }
-                        </Card.Body>
-                    </Card.Body>
-                </Card> */}
-{/* Chat Component */ }
-{/* <Chat /> */ }

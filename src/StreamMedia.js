@@ -1,6 +1,6 @@
 // © Microsoft Corporation. All rights reserved.
-
-import React, { useEffect, createRef } from "react";
+// , { useEffect, createRef }
+import React from "react";
 import { Card } from 'react-bootstrap';
 export default class StreamMedia extends React.Component {
     constructor(props) {
@@ -60,7 +60,8 @@ export default class StreamMedia extends React.Component {
                 <div className="m-1">
                     <Card.Title>
                         <div className="w-75">
-                            {this.userId}'s {this.stream.type === 'Video' ? 'Video' : 'Screen Share'}
+                            {/* {this.userId}'s */}
+                            Incoming {this.stream.type === 'Video' ? 'Video' : 'Screen Share'}
                         </div>
                     </Card.Title>
                     <Card.Body style={{ padding: 0 }}>
