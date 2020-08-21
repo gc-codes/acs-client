@@ -9,6 +9,8 @@ import CallCard from './CallCard';
 import Navigation from './partials/Navigation';
 import SelectUserBody from './partials/SelectUserBody';
 import axios from 'axios';
+import { ChatClient } from '@ic3/communicationservices-chat';
+import { CommunicationUserCredential } from '@azure/communication-common';
 
 class Dashboard extends Component {
     constructor(props) {
@@ -16,6 +18,7 @@ class Dashboard extends Component {
         this.userDetails = props.userDetails;
         this.callClient = null;
         this.otherUsers = [];
+        this.chatClient = null;
 
         this.state = {
             selectedCameraDeviceId: null,
@@ -24,11 +27,8 @@ class Dashboard extends Component {
             showCameraNotFoundWarning: false,
             showSpeakerNotFoundWarning: false,
             showMicrophoneNotFoundWarning: false,
-<<<<<<< HEAD
             selectedUser: null,
-=======
-            messageTextBox : "",
->>>>>>> 17e94f0a0f736d371b4013329a883811203d28ab
+            messageTextBox: "",
             messages: [
                 new Message({
                     id: 1,
@@ -37,9 +37,6 @@ class Dashboard extends Component {
                 new Message({ id: 0, message: "Hi I am doing great thanks ;)" }),
             ],
         };
-
-        this.handleMessageChange = this.handleMessageChange.bind(this);
-        this.handleMessageSent = this.handleMessageSent.bind(this);
     }
 
     async componentDidMount() {
@@ -74,6 +71,24 @@ class Dashboard extends Component {
                 }
             });
         });
+
+        // Chat subscription
+        const clientOptions = {
+            isTestEnv: true,
+            signalingDisabled: false
+        };
+
+        // console.log("SpoolToken");
+        // console.log(this.userDetails.spoolToken);
+        var chatClient = new ChatClient('https://acs-demo.westus.communications.azure.com', new CommunicationUserCredential(this.userDetails.spoolToken), clientOptions);
+        // console.log(chatClient);
+        this.setState({ chatClient: chatClient });
+        // chatClient.on("messageReceived", (e) => {
+        //         console.log("Notification messageReceived!");
+        //         console.log(e)
+        //         //your code here
+        // });
+
         // Fetch other users
         this.getOtherUsers();
     }
@@ -90,8 +105,8 @@ class Dashboard extends Component {
 
     placeCall = async () => {
         try {
-            this.getSpoolId(this.state.selectedUser).then(userSpoolID => {
-                this.state.callClient.call([userSpoolID], this.getPlaceCallOptions());
+            this.getSpoolId(this.state.selectedUser).then(response => {
+                this.state.callClient.call([response.spoolID], this.getPlaceCallOptions());
             });
         } catch (e) {
             console.log('Failed to place a call', e);
@@ -143,54 +158,96 @@ class Dashboard extends Component {
 
     // Select user to chat or have a call with
     selectUser = (user) => {
-        if (user.spoolID === "") {
-            this.getSpoolId(user).then(userSpoolID => {
-                user.spoolID = userSpoolID;
-                this.setState({ selectedUser: user });
-            });
-        } else {
+        this.getSpoolId(user).then(response => {
+            user.spoolID = response.spoolID;
+            user.chatThreadID = response.chatThreadID;
             this.setState({ selectedUser: user });
-        }
+        });
     }
 
     async getSpoolId(user) {
+        // header
         const headers = {
             'Authorization': 'Bearer ' + this.props.userDetails.token
         };
-        let response = await axios.get(`/user/getSpoolId?username=${user.username}`, { headers })
-        return response.data.spoolID;
+
+        let spoolResponse = await axios.get(`/user/getSpoolId?username=${user.username}`, { headers });
+        let data = {
+            spoolToken: this.userDetails.spoolToken,
+            secondaryUsername: user.username
+        };
+        let chatThreadResponse = await axios.post('/chat/createThread', data, { headers });
+
+        // Get All chat messages
+        // this.getAllChatMessages(chatThreadResponse);
+
+        // responses
+        let response = {
+            spoolID: spoolResponse.data.spoolID,
+            chatThreadID: chatThreadResponse.data.id
+        };
+        console.log(response);
+        return response;
     }
 
-    handleMessageChange(event){
-        // implement send typing notif
+    async getAllChatMessages(chat) {
+        // let messages = await this.state.chatClient.getMessages(chat.data.id);
+        // console.log("Messages...");
+        // console.log(messages);
+        // console.log("+++++++++++++++++++++++++")
+        const headers = {
+            'Authorization': 'Bearer ' + this.props.userDetails.token
+        };
+        let allMessagesResponse = await axios.get(`/chat/getAllMessages?threadId=${chat.data.id}`, { headers });
+        // All messages response
+        console.log("allMessagesResponse");
+        console.log(allMessagesResponse);
+        return allMessagesResponse;
+    }
 
+    async sendMessage(message) {
+        const headers = {
+            'Authorization': 'Bearer ' + this.props.userDetails.token
+        }
+        let data = {
+            threadId: this.state.selectedUser.chatThreadID,
+            messageText: message,
+            spoolToken: this.props.userDetails.spoolToken
+        }
+        let sendMessageResponse = await axios.post('/chat/sendMessage/', data, { headers });
+        return sendMessageResponse;
+    }
+
+    handleMessageChange = (event) => {
+        // implement send typing notif
         this.setState({
-            messageTextBox : event.target.value
+            messageTextBox: event.target.value
         })
     }
 
-    handleMessageSent(event){
+    handleMessageSent = (event) => {
         let message = new Message({
             id: 0,
             message: this.state.messageTextBox,
         })
         this.setState({
-            messages : [...this.state.messages, message],
-            messageTextBox : ""
+            messages: [...this.state.messages, message],
+            messageTextBox: ""
         })
+        // Send message
+        this.sendMessage(this.state.messageTextBox);
+        const sleep = milliseconds => {
+            return new Promise(resolve => setTimeout(resolve, milliseconds));
+        };
 
-        const sleep = milliseconds => { 
-            return new Promise(resolve => setTimeout(resolve, milliseconds)); 
-        }; 
-        
-        sleep(3000).then(()=>{
+        sleep(3000).then(() => {
             let message = new Message({
                 id: 1,
                 message: "This is a dummy reply",
             })
             this.setState({
-                messages : [...this.state.messages, message],
-                messageTextBox : ""
+                messages: [...this.state.messages, message],
+                messageTextBox: ""
             })
         })
     }
@@ -200,7 +257,6 @@ class Dashboard extends Component {
             <div style={{ height: '80%' }}>
                 {/* Navbar goes here */}
                 <Navigation userDetails={this.userDetails} />
-
                 {/* Chat and call area container */}
                 <Container style={{ height: '100%', marginTop: '40px' }}>
                     <Row style={{ height: '100%' }}>
@@ -257,7 +313,7 @@ class Dashboard extends Component {
                                         <FormControl
                                             placeholder="Type a message"
                                             aria-describedby="sendMessage-btn"
-                                            value = {this.state.messageTextBox}
+                                            value={this.state.messageTextBox}
                                             onChange={this.handleMessageChange}
                                         />
                                         <InputGroup.Append>

@@ -18,7 +18,7 @@ class CallCard extends React.Component {
             callState: props.call.state,
             remoteParticipants: props.call.remoteParticipants,
             streams: [],
-            videoOn: false,
+            videoOn: true,
             micOn: true,
             onHold: false,
             screenShareOn: false,

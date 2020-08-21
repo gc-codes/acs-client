@@ -3,8 +3,10 @@
   "version": "0.1.0",
   "private": false,
   "dependencies": {
-    "@azure/communication-common": "file://./packages/communication-common-1.0.0-dev.20200722.2.tgz",
+    "@azure/communication-common": "file://./packages/azure-communication-common-1.0.0-dev.20200720.3.tgz",
     "@azure/communication-configuration": "file://./packages/communication-configuration-1.0.0-dev.20200722.2.tgz",
+    "@ic3/communicationservices-chat": "file://./packages/ic3-communicationservices-chat-0.1.154.tgz",
+    "@ic3/communicationservices-signaling": "file://./packages/ic3-communicationservices-signaling-0.1.154.tgz",
     "@fluentui/react": "^7.128.1",
     "@skype/spool-sdk": "file://./packages/acs-calling-client-web-sdk-v1.7.8.tgz",
     "@testing-library/jest-dom": "^4.2.4",
