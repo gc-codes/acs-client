@@ -43,3 +43,7 @@
   background: rgba(29, 28, 28, 0.089);
   transition: 0.2s;
 }
+
+#chatArea{
+  padding: 0px !important;
+}

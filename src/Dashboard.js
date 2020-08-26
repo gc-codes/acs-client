@@ -11,6 +11,7 @@ import SelectUserBody from './partials/SelectUserBody';
 import axios from 'axios';
 import { ChatClient } from '@ic3/communicationservices-chat';
 import { CommunicationUserCredential } from '@azure/communication-common';
+import { concatStyleSetsWithProps } from 'office-ui-fabric-react';
 
 class Dashboard extends Component {
     constructor(props) {
@@ -36,6 +37,7 @@ class Dashboard extends Component {
                 }),
                 new Message({ id: 0, message: "Hi I am doing great thanks ;)" }),
             ],
+            lastMessageId: null
         };
     }
 
@@ -72,23 +74,6 @@ class Dashboard extends Component {
             });
         });
 
-        // Chat subscription
-        const clientOptions = {
-            isTestEnv: true,
-            signalingDisabled: false
-        };
-
-        // console.log("SpoolToken");
-        // console.log(this.userDetails.spoolToken);
-        var chatClient = new ChatClient('https://acs-demo.westus.communications.azure.com', new CommunicationUserCredential(this.userDetails.spoolToken), clientOptions);
-        // console.log(chatClient);
-        this.setState({ chatClient: chatClient });
-        // chatClient.on("messageReceived", (e) => {
-        //         console.log("Notification messageReceived!");
-        //         console.log(e)
-        //         //your code here
-        // });
-
         // Fetch other users
         this.getOtherUsers();
     }
@@ -105,9 +90,7 @@ class Dashboard extends Component {
 
     placeCall = async () => {
         try {
-            this.getSpoolId(this.state.selectedUser).then(response => {
-                this.state.callClient.call([response.spoolID], this.getPlaceCallOptions());
-            });
+            this.state.callClient.call([this.state.selectedUser.spoolID], this.getPlaceCallOptions());
         } catch (e) {
             console.log('Failed to place a call', e);
         }
@@ -156,53 +139,72 @@ class Dashboard extends Component {
         return placeCallOptions;
     }
 
-    // Select user to chat or have a call with
-    selectUser = (user) => {
-        this.getSpoolId(user).then(response => {
-            user.spoolID = response.spoolID;
-            user.chatThreadID = response.chatThreadID;
-            this.setState({ selectedUser: user });
-        });
+    formatMessages(messages) {
+        let messageList = [];
+        if (typeof messages !== "undefined" && messages.length > 0) {
+            messages.forEach(message => {
+                if (message.senderDisplayName === this.userDetails.username) {
+                    messageList.push(new Message({ id: 0, message: message.content }));
+                } else {
+                    messageList.push(new Message({ id: 1, message: message.content }));
+                }
+            });
+        }
+        return messageList;
     }
 
-    async getSpoolId(user) {
-        // header
+    // Select user to chat or have a call with
+    selectUser = (user) => {
+        this.getInitialChatData(user).then(response => {
+            user.chatThreadID = response.threadId;
+            let messageList = [];
+            let newlatestMessageId = null;
+            if (typeof response.messages !== "undefined") {
+                messageList = this.formatMessages(response.messages);
+                newlatestMessageId = response.messages[response.messages.length - 1].messageId;
+            }
+            this.setState({ selectedUser: user, messages: messageList, latestMessageId: newlatestMessageId }
+                ,
+                () => {
+                    setInterval(() => {
+                        console.log("Polling to server");
+                        this.getNewerMessages(this.state.selectedUser.chatThreadID, this.state.latestMessageId).then(newMessagesResponse => {
+                            let newMessageList = this.formatMessages(newMessagesResponse);
+                            console.log(newMessagesResponse);
+                            if (newMessagesResponse.length > 0) {
+                                let newlatestMessageID = newMessagesResponse[newMessagesResponse.length - 1].messageId;
+                                this.setState({ messages: [...this.state.messages, ...newMessageList], latestMessageId: newlatestMessageID });
+                            }
+                        });
+                    }, 5000);
+                }
+            );
+        })
+    }
+
+    async getInitialChatData(user) {
         const headers = {
             'Authorization': 'Bearer ' + this.props.userDetails.token
         };
-
-        let spoolResponse = await axios.get(`/user/getSpoolId?username=${user.username}`, { headers });
         let data = {
             spoolToken: this.userDetails.spoolToken,
             secondaryUsername: user.username
         };
         let chatThreadResponse = await axios.post('/chat/createThread', data, { headers });
-
-        // Get All chat messages
-        // this.getAllChatMessages(chatThreadResponse);
-
-        // responses
-        let response = {
-            spoolID: spoolResponse.data.spoolID,
-            chatThreadID: chatThreadResponse.data.id
-        };
-        console.log(response);
-        return response;
+        return chatThreadResponse.data;
     }
 
-    async getAllChatMessages(chat) {
-        // let messages = await this.state.chatClient.getMessages(chat.data.id);
-        // console.log("Messages...");
-        // console.log(messages);
-        // console.log("+++++++++++++++++++++++++")
+    async getNewerMessages(chatThreadID, lastMessageId) {
         const headers = {
             'Authorization': 'Bearer ' + this.props.userDetails.token
         };
-        let allMessagesResponse = await axios.get(`/chat/getAllMessages?threadId=${chat.data.id}`, { headers });
-        // All messages response
-        console.log("allMessagesResponse");
-        console.log(allMessagesResponse);
-        return allMessagesResponse;
+        console.log("Latest Message ID: " + lastMessageId);
+        let newerMessagesResponse = await axios.get(`/chat/getNewerMessages?threadId=${chatThreadID}&lastMessageId=${lastMessageId}`, { headers });
+        // Newer messages response
+        console.log("newerMessagesResponse");
+        console.log(newerMessagesResponse.data);
+        console.log(lastMessageId);
+        return newerMessagesResponse.data;
     }
 
     async sendMessage(message) {
@@ -226,30 +228,9 @@ class Dashboard extends Component {
     }
 
     handleMessageSent = (event) => {
-        let message = new Message({
-            id: 0,
-            message: this.state.messageTextBox,
-        })
-        this.setState({
-            messages: [...this.state.messages, message],
-            messageTextBox: ""
-        })
         // Send message
         this.sendMessage(this.state.messageTextBox);
-        const sleep = milliseconds => {
-            return new Promise(resolve => setTimeout(resolve, milliseconds));
-        };
-
-        sleep(3000).then(() => {
-            let message = new Message({
-                id: 1,
-                message: "This is a dummy reply",
-            })
-            this.setState({
-                messages: [...this.state.messages, message],
-                messageTextBox: ""
-            })
-        })
+        this.state.messageTextBox = "";
     }
 
     render() {
@@ -277,37 +258,40 @@ class Dashboard extends Component {
                                     {this.state.selectedUser && <Button variant="outline-success" style={{ float: 'right' }} id="placeCall-btn" onClick={() => this.placeCall()}><i className="fas fa-phone"></i></Button>}
                                 </Card.Header>
                                 {(this.state.selectedUser || this.state.call) ?
-                                    <Card.Body>
-                                        {/* Calling UI goes here */}
-                                        {
-                                            this.state.call && (<CallCard call={this.state.call}
-                                                callClient={this.state.callClient}
-                                                selectedCameraDeviceId={this.state.selectedCameraDeviceId}
-                                                selectedSpeakerDeviceId={this.state.selectedSpeakerDeviceId}
-                                                selectedMicrophoneDeviceId={this.state.selectedMicrophoneDeviceId} />)
-                                        }
-                                        {/* Messages go here */}
-                                        {!this.state.call &&
-                                            (<ChatFeed
-                                                messages={this.state.messages} // Boolean: list of message objects
-                                                isTyping={this.state.is_typing} // Boolean: is the recipient typing
-                                                hasInputField={false} // Boolean: use our input, or use your own
-                                                showSenderName // show the name of the user who sent the message
-                                                bubblesCentered={false} //Boolean should the bubbles be centered in the feed?
-                                                // JSON: Custom bubble styles
-                                                bubbleStyles={
-                                                    {
-                                                        text: {
-                                                            fontSize: 14
-                                                        },
-                                                        chatbubble: {
-                                                            borderRadius: 4,
-                                                            padding: 8
+                                    <Card.Body id="chatArea">
+                                        <div style={{ minHeight: '100%', maxHeight: '500px', overflowY: 'scroll', width: '100%', padding: '12px' }}>
+                                            {/* Calling UI goes here */}
+                                            {
+                                                this.state.call && (<CallCard call={this.state.call}
+                                                    callClient={this.state.callClient}
+                                                    selectedCameraDeviceId={this.state.selectedCameraDeviceId}
+                                                    selectedSpeakerDeviceId={this.state.selectedSpeakerDeviceId}
+                                                    selectedMicrophoneDeviceId={this.state.selectedMicrophoneDeviceId} />)
+                                            }
+                                            {/* Messages go here */}
+                                            {!this.state.call &&
+                                                (<ChatFeed
+                                                    messages={this.state.messages} // Boolean: list of message objects
+                                                    isTyping={this.state.is_typing} // Boolean: is the recipient typing
+                                                    hasInputField={false} // Boolean: use our input, or use your own
+                                                    showSenderName // show the name of the user who sent the message
+                                                    bubblesCentered={false} //Boolean should the bubbles be centered in the feed?
+                                                    // JSON: Custom bubble styles
+                                                    bubbleStyles={
+                                                        {
+                                                            text: {
+                                                                fontSize: 14
+                                                            },
+                                                            chatbubble: {
+                                                                borderRadius: 4,
+                                                                padding: 8
+                                                            }
                                                         }
                                                     }
-                                                }
-                                            />)}
+                                                />)}
+                                        </div>
                                     </Card.Body> : <SelectUserBody />}
+
                                 {(!this.state.call && this.state.selectedUser) && <Card.Footer>
                                     <InputGroup className="mb-3" style={{ width: '100%' }}>
                                         <FormControl
@@ -315,6 +299,7 @@ class Dashboard extends Component {
                                             aria-describedby="sendMessage-btn"
                                             value={this.state.messageTextBox}
                                             onChange={this.handleMessageChange}
+                                            required={true}
                                         />
                                         <InputGroup.Append>
                                             <Button variant="success" id="sendMessage-btn" onClick={this.handleMessageSent}>Send</Button>
