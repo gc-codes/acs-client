@@ -32,7 +32,7 @@
   "devDependencies": {
     "@azure/logger": "latest"
   },
-  "proxy": "http://localhost:3001",
+  "proxy": "http://acs-demo-node-service.azurewebsites.net/",
   "eslintConfig": {
     "extends": "react-app"
   },
